@@ -1,0 +1,27 @@
+{
+  "name": "@philongevity/mcp-server",
+  "version": "0.1.0",
+  "description": "Model Context Protocol server for Phi Longevity — agents can call the PRISM longevity recommendation engine on SYNTHETIC biomarker panels. Synthetic/de-identified data only; no PHI; stateless.",
+  "license": "UNLICENSED",
+  "type": "module",
+  "bin": {
+    "phi-mcp-server": "dist/index.js"
+  },
+  "files": ["dist", "README.md"],
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsc --watch",
+    "prepublishOnly": "npm run build"
+  },
+  "engines": { "node": ">=18" },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0",
+    "@types/node": "^20.0.0"
+  },
+  "keywords": ["mcp", "model-context-protocol", "longevity", "health", "biomarkers", "phi-longevity"]
+}
