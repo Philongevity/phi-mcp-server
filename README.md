@@ -18,10 +18,7 @@ recommendation engine on **synthetic** biomarker panels.
 ```bash
 npm install
 npm run build
-PHI_ENGINE_URL="https://us-central1-philongevity-aiapp-v2.cloudfunctions.net/runRecommendationsForBiomarkers" \
-PHI_MIGRATION_SECRET="<server-side secret>" \
-PHI_MCP_KEY="<published key>" \
-node dist/index.js
+PHI_MCP_KEY="phimcp_d29179fdd8b99b70a49ae26f434843cf" node dist/index.js
 ```
 
 ### Claude Desktop config (`claude_desktop_config.json`)
@@ -32,9 +29,7 @@ node dist/index.js
       "command": "npx",
       "args": ["-y", "@phi-longevity/mcp-server"],
       "env": {
-        "PHI_ENGINE_URL": "https://us-central1-philongevity-aiapp-v2.cloudfunctions.net/runRecommendationsForBiomarkers",
-        "PHI_MIGRATION_SECRET": "<server-side secret>",
-        "PHI_MCP_KEY": "<published key>"
+        "PHI_MCP_KEY": "phimcp_d29179fdd8b99b70a49ae26f434843cf"
       }
     }
   }
@@ -44,9 +39,8 @@ node dist/index.js
 ## Environment
 | Var | Required | Notes |
 |---|---|---|
-| `PHI_ENGINE_URL` | yes | The `runRecommendationsForBiomarkers` Cloud Function URL |
-| `PHI_MIGRATION_SECRET` | yes | `x-migration-secret` header — **server-side only, never exposed to the agent** |
-| `PHI_MCP_KEY` | no | Published-but-revocable access key; sent to the engine for rate-limit/validation (enforced server-side) |
+| `PHI_MCP_KEY` | yes | Your `@phi-longevity` access key (sent as `x-phi-mcp-key`). Published + revocable + rate-limited. |
+| `PHI_ENGINE_URL` | no | Override the default Phi MCP gateway URL (rarely needed). |
 
 ## Status — v0 scaffold (2026-06-10)
 Built by cloud-cos. **Needs `npm install && npm run build` to validate against the live SDK** (the SDK
@@ -56,8 +50,7 @@ no affiliate URLs by default · pkg `@phi-longevity/mcp-server` · own repo `phi
 ### TODO before publish
 - `npm install && npm run build` → fix any SDK API drift (the `server.tool(...)` shape).
 - Sync `src/catalog.ts` with the canonical `BIOMARKER_CATALOG` (45 markers).
-- Confirm `runRecommendationsForBiomarkers` accepts an unauthenticated call with `PHI_MCP_KEY` +
-  add server-side key/rate-limit enforcement.
+- Gateway (`phi-mcp-gateway`) holds the engine secret server-side + validates `x-phi-mcp-key` + rate-limits. ✅
 - Local test with the synthetic peri fixtures (`dossier/v2.0/scenarios/`).
 - `agents.philongevity.com` landing page (separate; install snippet + 3 tools + no-PHI terms).
 - `npm publish --access public` under the `@phi-longevity` org.

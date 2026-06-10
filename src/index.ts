@@ -24,8 +24,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import { BIOMARKER_CATALOG } from "./catalog.js";
 
-const ENGINE_URL = process.env.PHI_ENGINE_URL ?? "";
-const MIGRATION_SECRET = process.env.PHI_MIGRATION_SECRET ?? "";
+const GATEWAY_URL = process.env.PHI_ENGINE_URL ?? "https://phi-mcp-gateway-bblwxa6cvq-uc.a.run.app";
 const MCP_KEY = process.env.PHI_MCP_KEY ?? "";
 
 const SYNTHETIC_WARNING =
@@ -53,16 +52,15 @@ function textResult(text: string) {
 }
 
 async function callEngine(body: Record<string, unknown>) {
-  if (!ENGINE_URL || !MIGRATION_SECRET) {
-    throw new Error("Server not configured: set PHI_ENGINE_URL and PHI_MIGRATION_SECRET.");
+  if (!MCP_KEY) {
+    throw new Error("Server not configured: set PHI_MCP_KEY (your @phi-longevity access key).");
   }
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
-    "x-migration-secret": MIGRATION_SECRET,
+    "x-phi-mcp-key": MCP_KEY,
   };
-  if (MCP_KEY) headers["x-phi-mcp-key"] = MCP_KEY;
-  const res = await fetch(ENGINE_URL, { method: "POST", headers, body: JSON.stringify(body) });
-  if (!res.ok) throw new Error(`Engine returned ${res.status}.`);
+  const res = await fetch(GATEWAY_URL, { method: "POST", headers, body: JSON.stringify(body) });
+  if (!res.ok) throw new Error(`Gateway returned ${res.status}.`);
   return res.json() as Promise<any>;
 }
 
