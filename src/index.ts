@@ -98,8 +98,11 @@ server.tool(
     const t0 = Date.now();
     if (!allow()) return textResult("Rate limit reached. Please retry in a moment.");
     try {
+      // The engine expects biomarkers as an array of {name, value}; the tool takes an
+      // agent-friendly {name: value} map → transform here.
+      const biomarkerArray = Object.entries(args.biomarkers || {}).map(([name, value]) => ({ name, value }));
       const out = await callEngine({
-        biomarkers: args.biomarkers,
+        biomarkers: biomarkerArray,
         conditionFocus: args.conditionFocus ?? "general_wellness",
         age: args.age,
         biologicalSex: args.biologicalSex,
