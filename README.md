@@ -1,4 +1,4 @@
-# @philongevity/mcp-server
+# @phi-longevity/mcp-server
 
 A Model Context Protocol (MCP) server that lets AI agents call **Phi Longevity's PRISM** longevity
 recommendation engine on **synthetic** biomarker panels.
@@ -30,7 +30,7 @@ node dist/index.js
   "mcpServers": {
     "phi-longevity": {
       "command": "npx",
-      "args": ["-y", "@philongevity/mcp-server"],
+      "args": ["-y", "@phi-longevity/mcp-server"],
       "env": {
         "PHI_ENGINE_URL": "https://us-central1-philongevity-aiapp-v2.cloudfunctions.net/runRecommendationsForBiomarkers",
         "PHI_MIGRATION_SECRET": "<server-side secret>",
@@ -51,7 +51,7 @@ node dist/index.js
 ## Status — v0 scaffold (2026-06-10)
 Built by cloud-cos. **Needs `npm install && npm run build` to validate against the live SDK** (the SDK
 wasn't installed in the scaffold environment). Decisions locked: revocable key + rate-limit · npm stdio ·
-no affiliate URLs by default · pkg `@philongevity/mcp-server` · own repo `phi-mcp-server`.
+no affiliate URLs by default · pkg `@phi-longevity/mcp-server` · own repo `phi-mcp-server`.
 
 ### TODO before publish
 - `npm install && npm run build` → fix any SDK API drift (the `server.tool(...)` shape).
@@ -60,7 +60,7 @@ no affiliate URLs by default · pkg `@philongevity/mcp-server` · own repo `phi-
   add server-side key/rate-limit enforcement.
 - Local test with the synthetic peri fixtures (`dossier/v2.0/scenarios/`).
 - `agents.philongevity.com` landing page (separate; install snippet + 3 tools + no-PHI terms).
-- `npm publish --access public` under the `@philongevity` org.
+- `npm publish --access public` under the `@phi-longevity` org.
 
 ## HIPAA / privacy
 Synthetic-only at the protocol boundary; stateless; aggregate-only telemetry (counts/timing to stderr,
