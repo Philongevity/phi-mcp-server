@@ -1,6 +1,6 @@
 {
   "name": "@phi-longevity/mcp-server",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Model Context Protocol server for Phi Longevity \u2014 agents can call the PRISM longevity recommendation engine on SYNTHETIC biomarker panels. Synthetic/de-identified data only; no PHI; stateless.",
   "license": "Apache-2.0",
   "type": "module",
