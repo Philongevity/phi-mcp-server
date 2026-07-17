@@ -7,16 +7,22 @@
     "url": "https://github.com/Philongevity/phi-chief-of-staff",
     "source": "github"
   },
-  "version": "0.5.3",
+  "version": "0.6.0",
   "websiteUrl": "https://philongevity.com/for-agents",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "@phi-longevity/mcp-server",
-      "version": "0.5.3",
+      "version": "0.6.0",
       "transport": {
         "type": "stdio"
       }
+    }
+  ],
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://us-central1-philongevity-aiapp-v2.cloudfunctions.net/phi-mcp-remote"
     }
   ]
 }

@@ -35,6 +35,16 @@ it's helping.
 That's it. A published, rate-limited access key is built in. If you have a dedicated key,
 set `PHI_MCP_KEY` to override it.
 
+### Remote (zero-install)
+
+Point any MCP client that supports Streamable HTTP at:
+
+```
+https://us-central1-philongevity-aiapp-v2.cloudfunctions.net/phi-mcp-remote
+```
+
+Same three tools, same synthetic-only rule, nothing to install.
+
 ### Run locally
 
 ```bash
