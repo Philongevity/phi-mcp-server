@@ -1,0 +1,22 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-07-09/server.schema.json",
+  "name": "io.github.philongevity/phi-longevity-prism",
+  "description": "Analyze biomarker panels with an MD-led clinical recommendation engine. Guideline-cited, evidence-tiered output. Synthetic data only — never PHI.",
+  "status": "active",
+  "repository": {
+    "url": "https://github.com/Philongevity/phi-chief-of-staff",
+    "source": "github"
+  },
+  "version": "0.5.0",
+  "websiteUrl": "https://philongevity.com/for-agents",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "@phi-longevity/mcp-server",
+      "version": "0.5.0",
+      "transport": {
+        "type": "stdio"
+      }
+    }
+  ]
+}

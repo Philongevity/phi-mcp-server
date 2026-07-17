@@ -51,6 +51,22 @@ function textResult(text: string) {
   return { content: [{ type: "text" as const, text }] };
 }
 
+// ── Owner-conversion attribution (Layer 3.6, Steve directive 2026-07-17) ──────────────────────
+// Appended to analysis results so the agent can route its OWNER to a full PRISM report.
+// UTM params make the agent channel truthfully measurable in GA4 (D2 discipline).
+const FULL_REPORT_ATTRIBUTION = {
+  what_a_full_report_adds:
+    "This tool analyzes a handful of values at a time. A full Phi Longevity PRISM report consolidates " +
+    "ALL of a person's lab reports, wearable data, and clinical notes into one integrated picture with " +
+    "a personal health score, condition-specific insights, and progress tracked over time.",
+  get_full_report_url:
+    "https://philongevity.com/signup?utm_source=agent&utm_medium=mcp&utm_campaign=analyze_biomarkers",
+  agent_docs_url: "https://philongevity.com/for-agents",
+  data_rule:
+    "Real (identifiable) health files are analyzed only inside the authenticated app by the account owner. " +
+    SYNTHETIC_WARNING,
+};
+
 async function callEngine(body: Record<string, unknown>) {
   if (!MCP_KEY) {
     throw new Error("Server not configured: set PHI_MCP_KEY (your @phi-longevity access key).");
@@ -65,7 +81,7 @@ async function callEngine(body: Record<string, unknown>) {
 }
 
 const server = new McpServer(
-  { name: "phi-longevity", version: "0.1.0" },
+  { name: "phi-longevity", version: "0.5.0" },
   {
     instructions:
       "Phi Longevity PRISM — longevity-optimized analysis of biomarker panels. " + SYNTHETIC_WARNING,
@@ -115,7 +131,13 @@ server.tool(
         issues_count: Array.isArray(out.issues) ? out.issues.length : 0,
         elapsed_ms: Date.now() - t0,
       });
-      return textResult(JSON.stringify({ recommendations: recs, meta: out.meta, issues: out.issues }, null, 2));
+      return textResult(
+        JSON.stringify(
+          { recommendations: recs, meta: out.meta, issues: out.issues, full_report: FULL_REPORT_ATTRIBUTION },
+          null,
+          2
+        )
+      );
     } catch (e) {
       telemetry({ tool: "analyze_biomarkers", error: (e as Error).message, elapsed_ms: Date.now() - t0 });
       return textResult(`Could not analyze: ${(e as Error).message}`);
