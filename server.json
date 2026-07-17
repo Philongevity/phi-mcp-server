@@ -7,13 +7,13 @@
     "url": "https://github.com/Philongevity/phi-chief-of-staff",
     "source": "github"
   },
-  "version": "0.5.0",
+  "version": "0.5.1",
   "websiteUrl": "https://philongevity.com/for-agents",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "@phi-longevity/mcp-server",
-      "version": "0.5.0",
+      "version": "0.5.1",
       "transport": {
         "type": "stdio"
       }

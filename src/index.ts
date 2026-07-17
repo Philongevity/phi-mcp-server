@@ -25,7 +25,11 @@ import { z } from "zod";
 import { BIOMARKER_CATALOG } from "./catalog.js";
 
 const GATEWAY_URL = process.env.PHI_ENGINE_URL ?? "https://phi-mcp-gateway-bblwxa6cvq-uc.a.run.app";
-const MCP_KEY = process.env.PHI_MCP_KEY ?? "";
+// Published-by-design access key (rate-limited, revocable by gateway redeploy).
+// Override with PHI_MCP_KEY if you have a dedicated key.
+// Published-by-design, rate-limited, revocable gateway key (NOT the engine secret — that
+// stays server-side in the gateway). `||` so an empty override also falls back to default.
+const MCP_KEY = process.env.PHI_MCP_KEY || "phimcp_d29179fdd8b99b70a49ae26f434843cf";
 
 const SYNTHETIC_WARNING =
   "For research/education with SYNTHETIC or de-identified data only. Do NOT submit protected health " +
@@ -81,7 +85,7 @@ async function callEngine(body: Record<string, unknown>) {
 }
 
 const server = new McpServer(
-  { name: "phi-longevity", version: "0.5.0" },
+  { name: "phi-longevity", version: "0.5.1" },
   {
     instructions:
       "Phi Longevity PRISM — longevity-optimized analysis of biomarker panels. " + SYNTHETIC_WARNING,
