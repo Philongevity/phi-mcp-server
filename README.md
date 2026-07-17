@@ -1,5 +1,7 @@
 # @phi-longevity/mcp-server
 
+[![smithery badge](https://smithery.ai/badge/philongevity/PRISM)](https://smithery.ai/servers/philongevity/PRISM)
+
 A Model Context Protocol (MCP) server that lets AI agents call **Phi Longevity's PRISM**
 clinical recommendation engine on **synthetic** biomarker panels — guideline-cited,
 evidence-tiered recommendations an agent can use when researching options for the person
