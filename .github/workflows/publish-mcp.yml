@@ -1,0 +1,85 @@
+name: Publish (npm + MCP Registry)
+
+# Durable, secret-light publish path for the Phi Longevity PRISM MCP server.
+# Trigger: push a version tag, e.g.  git tag v0.6.1 && git push origin v0.6.1
+#
+# - npm publish uses the NPM_TOKEN repo secret (npm automation token).
+# - MCP Registry publish uses GitHub Actions OIDC (github-oidc) — NO secret,
+#   no laptop device-code. An Action in Philongevity/phi-mcp-server is
+#   authorized to publish the io.github.Philongevity/* namespace.
+#
+# server.json version + packages[].version + package.json version must all
+# match the tag (minus the leading "v"). The workflow verifies this and fails
+# fast if they drift, so the npm package and the registry never disagree.
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # required for MCP Registry OIDC auth
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "lts/*"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Verify tag matches package + server versions
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          PKG_VERSION="$(node -p "require('./package.json').version")"
+          SRV_VERSION="$(node -p "require('./server.json').version")"
+          SRV_PKG_VERSION="$(node -p "require('./server.json').packages[0].version")"
+          echo "tag=$TAG_VERSION package.json=$PKG_VERSION server.json=$SRV_VERSION server.packages=$SRV_PKG_VERSION"
+          if [ "$TAG_VERSION" != "$PKG_VERSION" ] || [ "$TAG_VERSION" != "$SRV_VERSION" ] || [ "$TAG_VERSION" != "$SRV_PKG_VERSION" ]; then
+            echo "::error::Version mismatch — tag, package.json, and server.json (both version fields) must all equal $TAG_VERSION"
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Zero-config smoke (stdio spawn → tools/list must succeed with built-in key)
+        run: |
+          node -e '
+            const { spawn } = require("child_process");
+            const p = spawn("node", ["dist/index.js"], { stdio: ["pipe","pipe","inherit"] });
+            let buf = "";
+            p.stdout.on("data", d => { buf += d.toString(); });
+            p.stdin.write(JSON.stringify({jsonrpc:"2.0",id:1,method:"initialize",params:{protocolVersion:"2025-06-18",capabilities:{},clientInfo:{name:"ci",version:"1"}}})+"\n");
+            setTimeout(() => {
+              p.stdin.write(JSON.stringify({jsonrpc:"2.0",id:2,method:"tools/list"})+"\n");
+            }, 500);
+            setTimeout(() => {
+              p.kill();
+              if (!/"tools"/.test(buf)) { console.error("smoke FAILED — no tools in response"); process.exit(1); }
+              console.log("smoke OK — tools/list responded");
+            }, 2500);
+          '
+
+      - name: Publish to npm
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Install mcp-publisher
+        run: |
+          curl -L "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz mcp-publisher
+
+      - name: Authenticate to MCP Registry (OIDC — no secret)
+        run: ./mcp-publisher login github-oidc
+
+      - name: Publish to MCP Registry
+        run: ./mcp-publisher publish

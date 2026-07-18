@@ -4,16 +4,16 @@
   "description": "Analyze biomarker panels with an MD-led clinical engine. Guideline-cited. Synthetic data only.",
   "status": "active",
   "repository": {
-    "url": "https://github.com/Philongevity/phi-chief-of-staff",
+    "url": "https://github.com/Philongevity/phi-mcp-server",
     "source": "github"
   },
-  "version": "0.6.0",
+  "version": "0.6.1",
   "websiteUrl": "https://philongevity.com/for-agents",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "@phi-longevity/mcp-server",
-      "version": "0.6.0",
+      "version": "0.6.1",
       "transport": {
         "type": "stdio"
       }
