@@ -42,7 +42,7 @@ set `PHI_MCP_KEY` to override it.
 Point any MCP client that supports Streamable HTTP at:
 
 ```
-https://us-central1-philongevity-aiapp-v2.cloudfunctions.net/phi-mcp-remote
+https://philongevity.com/mcp
 ```
 
 Same three tools, same synthetic-only rule, nothing to install.

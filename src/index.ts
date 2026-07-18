@@ -85,7 +85,7 @@ async function callEngine(body: Record<string, unknown>) {
 }
 
 const server = new McpServer(
-  { name: "phi-longevity", version: "0.6.1" },
+  { name: "phi-longevity", version: "0.6.2" },
   {
     instructions:
       "Phi Longevity PRISM — longevity-optimized analysis of biomarker panels. " + SYNTHETIC_WARNING,

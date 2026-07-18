@@ -7,13 +7,13 @@
     "url": "https://github.com/Philongevity/phi-mcp-server",
     "source": "github"
   },
-  "version": "0.6.1",
+  "version": "0.6.2",
   "websiteUrl": "https://philongevity.com/for-agents",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "@phi-longevity/mcp-server",
-      "version": "0.6.1",
+      "version": "0.6.2",
       "transport": {
         "type": "stdio"
       }
@@ -22,7 +22,7 @@
   "remotes": [
     {
       "type": "streamable-http",
-      "url": "https://us-central1-philongevity-aiapp-v2.cloudfunctions.net/phi-mcp-remote"
+      "url": "https://philongevity.com/mcp"
     }
   ]
 }
