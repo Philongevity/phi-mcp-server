@@ -87,6 +87,17 @@ jobs:
         run: |
           curl -L "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz mcp-publisher
 
+      - name: Wait for npm to index this version (registry validates npm presence)
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          for i in $(seq 1 30); do
+            FOUND="$(npm view @phi-longevity/mcp-server@${TAG_VERSION} version 2>/dev/null || true)"
+            if [ "$FOUND" = "$TAG_VERSION" ]; then echo "npm has ${TAG_VERSION} (attempt $i)"; exit 0; fi
+            echo "waiting for npm to index ${TAG_VERSION} (attempt $i)..."; sleep 10
+          done
+          echo "::error::npm did not index ${TAG_VERSION} within timeout — registry publish would fail validation. Ensure npm ${TAG_VERSION} is published (CI NPM_TOKEN or pre-publish)."
+          exit 1
+
       - name: Authenticate to MCP Registry (OIDC — no secret)
         run: ./mcp-publisher login github-oidc
 
