@@ -69,8 +69,17 @@ jobs:
             }, 2500);
           '
 
-      - name: Publish to npm
-        run: npm publish --access public
+      - name: Publish to npm (skip if this version is already published)
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          PUBLISHED="$(npm view @phi-longevity/mcp-server@${TAG_VERSION} version 2>/dev/null || true)"
+          if [ "$PUBLISHED" = "$TAG_VERSION" ]; then
+            echo "npm already has ${TAG_VERSION} — skipping publish (idempotent)."
+          elif [ -n "${NODE_AUTH_TOKEN}" ]; then
+            npm publish --access public
+          else
+            echo "::warning::npm ${TAG_VERSION} not published and NPM_TOKEN secret is absent — skipping npm publish. Registry publish (OIDC) will still run. Add the NPM_TOKEN repo secret for fully-automated npm releases."
+          fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
