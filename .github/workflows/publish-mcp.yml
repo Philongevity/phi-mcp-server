@@ -70,24 +70,30 @@ jobs:
           '
 
       - name: Publish to npm (skip if this version is already published)
+        id: npm
         run: |
           TAG_VERSION="${GITHUB_REF_NAME#v}"
           PUBLISHED="$(npm view @phi-longevity/mcp-server@${TAG_VERSION} version 2>/dev/null || true)"
           if [ "$PUBLISHED" = "$TAG_VERSION" ]; then
             echo "npm already has ${TAG_VERSION} — skipping publish (idempotent)."
+            echo "npm_ready=true" >> "$GITHUB_OUTPUT"
           elif [ -n "${NODE_AUTH_TOKEN}" ]; then
             npm publish --access public
+            echo "npm_ready=true" >> "$GITHUB_OUTPUT"
           else
-            echo "::warning::npm ${TAG_VERSION} not published and NPM_TOKEN secret is absent — skipping npm publish. Registry publish (OIDC) will still run. Add the NPM_TOKEN repo secret for fully-automated npm releases."
+            echo "::warning::npm ${TAG_VERSION} not on npm and NPM_TOKEN secret is absent — skipping npm publish AND the registry publish (registry validates npm presence). Publish npm out-of-band, then re-push the tag to complete the registry step. This is NOT a failure."
+            echo "npm_ready=false" >> "$GITHUB_OUTPUT"
           fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Install mcp-publisher
+        if: steps.npm.outputs.npm_ready == 'true'
         run: |
           curl -L "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz mcp-publisher
 
       - name: Wait for npm to index this version (registry validates npm presence)
+        if: steps.npm.outputs.npm_ready == 'true'
         run: |
           TAG_VERSION="${GITHUB_REF_NAME#v}"
           for i in $(seq 1 30); do
@@ -95,11 +101,17 @@ jobs:
             if [ "$FOUND" = "$TAG_VERSION" ]; then echo "npm has ${TAG_VERSION} (attempt $i)"; exit 0; fi
             echo "waiting for npm to index ${TAG_VERSION} (attempt $i)..."; sleep 10
           done
-          echo "::error::npm did not index ${TAG_VERSION} within timeout — registry publish would fail validation. Ensure npm ${TAG_VERSION} is published (CI NPM_TOKEN or pre-publish)."
+          echo "::error::npm reported ${TAG_VERSION} as published but it did not index within timeout — registry publish would fail validation. Re-run this workflow (re-push the tag) once npm has propagated."
           exit 1
 
       - name: Authenticate to MCP Registry (OIDC — no secret)
+        if: steps.npm.outputs.npm_ready == 'true'
         run: ./mcp-publisher login github-oidc
 
       - name: Publish to MCP Registry
+        if: steps.npm.outputs.npm_ready == 'true'
         run: ./mcp-publisher publish
+
+      - name: Registry publish skipped notice
+        if: steps.npm.outputs.npm_ready != 'true'
+        run: echo "::notice::Registry publish skipped because npm ${GITHUB_REF_NAME#v} is not yet on npm (no NPM_TOKEN). Workflow is green by design — publish npm and re-push the tag to finish the registry update."
