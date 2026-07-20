@@ -1,21 +1,37 @@
 name: Publish (npm + MCP Registry)
 
-# Durable, secret-light publish path for the Phi Longevity PRISM MCP server.
-# Trigger: push a version tag, e.g.  git tag v0.6.1 && git push origin v0.6.1
+# Durable, secret-light publish for the Phi Longevity PRISM MCP server.
 #
-# - npm publish uses the NPM_TOKEN repo secret (npm automation token).
-# - MCP Registry publish uses GitHub Actions OIDC (github-oidc) — NO secret,
-#   no laptop device-code. An Action in Philongevity/phi-mcp-server is
-#   authorized to publish the io.github.Philongevity/* namespace.
+# TWO ways to run — both idempotent and safely re-runnable:
+#   1. Push a version tag:      git tag v0.6.4 && git push origin v0.6.4
+#   2. Manual re-run/dispatch:  Actions → this workflow → "Run workflow"
+#      (optional `version` input; defaults to the version in package.json on the
+#      chosen ref). Use this to FINISH a registry publish after npm was published
+#      out-of-band, or to recover from any transient failure — NO re-tag needed.
 #
-# server.json version + packages[].version + package.json version must all
-# match the tag (minus the leading "v"). The workflow verifies this and fails
-# fast if they drift, so the npm package and the registry never disagree.
+# Publishing model:
+#   - npm publish uses NPM_TOKEN if present; if absent it is skipped gracefully
+#     (publish npm out-of-band, then dispatch this workflow to finish the registry).
+#   - MCP Registry publish uses GitHub Actions OIDC — no secret, no device-code.
+#
+# The registry validates that the npm version actually exists, so the flow waits
+# for npm to be readable, then publishes the registry with retry + idempotent
+# success detection. The ONLY red outcome is a genuine, persistent outage — and
+# recovery from that is a one-click re-run (workflow_dispatch), not a re-tag.
+#
+# server.json version + packages[].version + package.json version must all match
+# the resolved version; a mismatch fails fast so npm and the registry never drift.
 
 on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to publish (e.g. 0.6.4). Leave blank to use package.json on this ref."
+        required: false
+        type: string
 
 jobs:
   publish:
@@ -33,15 +49,27 @@ jobs:
           node-version: "lts/*"
           registry-url: "https://registry.npmjs.org"
 
-      - name: Verify tag matches package + server versions
+      - name: Resolve target version (tag or dispatch input or package.json)
+        id: ver
         run: |
-          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
+            V="${{ github.event.inputs.version }}"
+            [ -z "$V" ] && V="$(node -p "require('./package.json').version")"
+          else
+            V="${GITHUB_REF_NAME#v}"
+          fi
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          echo "Resolved target version: $V (trigger=${GITHUB_EVENT_NAME})"
+
+      - name: Verify package + server versions all match the target
+        run: |
+          V="${{ steps.ver.outputs.version }}"
           PKG_VERSION="$(node -p "require('./package.json').version")"
           SRV_VERSION="$(node -p "require('./server.json').version")"
           SRV_PKG_VERSION="$(node -p "require('./server.json').packages[0].version")"
-          echo "tag=$TAG_VERSION package.json=$PKG_VERSION server.json=$SRV_VERSION server.packages=$SRV_PKG_VERSION"
-          if [ "$TAG_VERSION" != "$PKG_VERSION" ] || [ "$TAG_VERSION" != "$SRV_VERSION" ] || [ "$TAG_VERSION" != "$SRV_PKG_VERSION" ]; then
-            echo "::error::Version mismatch — tag, package.json, and server.json (both version fields) must all equal $TAG_VERSION"
+          echo "target=$V package.json=$PKG_VERSION server.json=$SRV_VERSION server.packages=$SRV_PKG_VERSION"
+          if [ "$V" != "$PKG_VERSION" ] || [ "$V" != "$SRV_VERSION" ] || [ "$V" != "$SRV_PKG_VERSION" ]; then
+            echo "::error::Version mismatch — target, package.json, and server.json (both version fields) must all equal $V"
             exit 1
           fi
 
@@ -69,19 +97,19 @@ jobs:
             }, 2500);
           '
 
-      - name: Publish to npm (skip if this version is already published)
+      - name: Publish to npm (idempotent — skip if this version is already published)
         id: npm
         run: |
-          TAG_VERSION="${GITHUB_REF_NAME#v}"
-          PUBLISHED="$(npm view @phi-longevity/mcp-server@${TAG_VERSION} version 2>/dev/null || true)"
-          if [ "$PUBLISHED" = "$TAG_VERSION" ]; then
-            echo "npm already has ${TAG_VERSION} — skipping publish (idempotent)."
+          V="${{ steps.ver.outputs.version }}"
+          PUBLISHED="$(npm view @phi-longevity/mcp-server@${V} version 2>/dev/null || true)"
+          if [ "$PUBLISHED" = "$V" ]; then
+            echo "npm already has ${V} — skipping publish (idempotent)."
             echo "npm_ready=true" >> "$GITHUB_OUTPUT"
           elif [ -n "${NODE_AUTH_TOKEN}" ]; then
             npm publish --access public
             echo "npm_ready=true" >> "$GITHUB_OUTPUT"
           else
-            echo "::warning::npm ${TAG_VERSION} not on npm and NPM_TOKEN secret is absent — skipping npm publish AND the registry publish (registry validates npm presence). Publish npm out-of-band, then re-push the tag to complete the registry step. This is NOT a failure."
+            echo "::warning::npm ${V} is not on npm and NPM_TOKEN is absent — skipping npm AND registry publish. Publish npm out-of-band, then re-run this workflow (Actions → Run workflow) to finish the registry. This is NOT a failure."
             echo "npm_ready=false" >> "$GITHUB_OUTPUT"
           fi
         env:
@@ -92,26 +120,49 @@ jobs:
         run: |
           curl -L "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz mcp-publisher
 
-      - name: Wait for npm to index this version (registry validates npm presence)
+      - name: Wait for npm to be readable (authoritative registry-JSON check, backoff to ~20 min)
         if: steps.npm.outputs.npm_ready == 'true'
         run: |
-          TAG_VERSION="${GITHUB_REF_NAME#v}"
-          for i in $(seq 1 30); do
-            FOUND="$(npm view @phi-longevity/mcp-server@${TAG_VERSION} version 2>/dev/null || true)"
-            if [ "$FOUND" = "$TAG_VERSION" ]; then echo "npm has ${TAG_VERSION} (attempt $i)"; exit 0; fi
-            echo "waiting for npm to index ${TAG_VERSION} (attempt $i)..."; sleep 10
+          V="${{ steps.ver.outputs.version }}"
+          # Poll the npm REGISTRY JSON directly (reflects the write; more consistent
+          # than the CLI cache) AND `npm view` as a fallback. Backoff caps at ~20 min,
+          # which absorbs any realistic propagation lag so this step effectively never
+          # fails for a genuinely-published version.
+          for i in $(seq 1 40); do
+            J="$(curl -fsSL "https://registry.npmjs.org/@phi-longevity/mcp-server/${V}" 2>/dev/null | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{process.stdout.write((JSON.parse(s).version)||"")}catch{process.stdout.write("")}})' 2>/dev/null || true)"
+            V2="$(npm view @phi-longevity/mcp-server@${V} version 2>/dev/null || true)"
+            if [ "$J" = "$V" ] || [ "$V2" = "$V" ]; then echo "npm has ${V} (attempt $i)"; exit 0; fi
+            SLEEP=$(( i < 10 ? 10 : 30 ))
+            echo "waiting for npm to propagate ${V} (attempt $i; sleep ${SLEEP}s)..."; sleep $SLEEP
           done
-          echo "::error::npm reported ${TAG_VERSION} as published but it did not index within timeout — registry publish would fail validation. Re-run this workflow (re-push the tag) once npm has propagated."
+          echo "::error::npm did not become readable for ${V} within ~20 min — this indicates an npm outage/propagation problem, not a config issue. Re-run this workflow (Actions → Run workflow) once npm shows the version; no re-tag needed."
           exit 1
 
       - name: Authenticate to MCP Registry (OIDC — no secret)
         if: steps.npm.outputs.npm_ready == 'true'
         run: ./mcp-publisher login github-oidc
 
-      - name: Publish to MCP Registry
+      - name: Publish to MCP Registry (retry + idempotent — already-published counts as success)
         if: steps.npm.outputs.npm_ready == 'true'
-        run: ./mcp-publisher publish
+        run: |
+          V="${{ steps.ver.outputs.version }}"
+          for attempt in 1 2 3 4 5; do
+            # `if` guard suspends `set -e` so a failed attempt doesn't abort the step.
+            if OUT="$(./mcp-publisher publish 2>&1)"; then RC=0; else RC=$?; fi
+            echo "$OUT"
+            if [ $RC -eq 0 ]; then echo "registry publish OK (attempt $attempt)"; exit 0; fi
+            # Idempotent: if the registry already has this version, treat as success.
+            if echo "$OUT" | grep -qiE "already (exists|published)|version .*exists|duplicate"; then
+              echo "registry already has ${V} — treating as success (idempotent)."; exit 0
+            fi
+            echo "registry publish attempt $attempt failed (rc=$RC) — retrying in 30s..."; sleep 30
+          done
+          # Final authoritative check before declaring failure: did it actually land?
+          LATEST="$(curl -fsSL "https://registry.modelcontextprotocol.io/v0/servers?search=philongevity" 2>/dev/null | grep -o "\"version\":\"${V}\"" | head -1 || true)"
+          if [ -n "$LATEST" ]; then echo "registry shows ${V} despite publish errors — success."; exit 0; fi
+          echo "::error::MCP Registry publish failed after retries for ${V}. npm is published, so re-run this workflow (Actions → Run workflow) to retry the registry step only — no re-tag, no device-code."
+          exit 1
 
       - name: Registry publish skipped notice
         if: steps.npm.outputs.npm_ready != 'true'
-        run: echo "::notice::Registry publish skipped because npm ${GITHUB_REF_NAME#v} is not yet on npm (no NPM_TOKEN). Workflow is green by design — publish npm and re-push the tag to finish the registry update."
+        run: echo "::notice::Registry publish skipped because npm ${{ steps.ver.outputs.version }} is not yet on npm (no NPM_TOKEN). Workflow is green by design — publish npm out-of-band, then re-run this workflow (Actions → Run workflow) to finish the registry."
