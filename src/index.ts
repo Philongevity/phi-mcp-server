@@ -55,6 +55,35 @@ function textResult(text: string) {
   return { content: [{ type: "text" as const, text }] };
 }
 
+function errorResult(text: string) {
+  return { content: [{ type: "text" as const, text }], isError: true };
+}
+
+/**
+ * Extract a human-actionable detail string from a non-OK engine/gateway response body.
+ * The synthetic-only engine returns JSON like {"error": "..."} (and sometimes "detail").
+ * Truncated defensively; never contains biomarker values (errors are validation/auth-shaped).
+ */
+async function readErrorDetail(res: Response): Promise<string> {
+  try {
+    const raw = (await res.text()).slice(0, 500);
+    try {
+      const j = JSON.parse(raw);
+      const msg = [j.error, j.detail].filter((x) => typeof x === "string" && x).join(" — ");
+      if (msg) return msg.slice(0, 300);
+    } catch { /* not JSON — fall through */ }
+    return raw.slice(0, 300);
+  } catch {
+    return "";
+  }
+}
+
+const EMPTY_PANEL_HELP =
+  "No biomarkers were provided — the `biomarkers` map was empty. Provide at least one biomarker as " +
+  'name -> numeric value, e.g. { "Hemoglobin A1c": 5.4, "LDL Cholesterol": 130 }. ' +
+  "Call the list_supported_biomarkers tool for the 51 supported names, units, and reference ranges. " +
+  SYNTHETIC_WARNING;
+
 // ── Owner-conversion attribution (Layer 3.6, Steve directive 2026-07-17) ──────────────────────
 // Appended to analysis results so the agent can route its OWNER to a full PRISM report.
 // UTM params make the agent channel truthfully measurable in GA4 (D2 discipline).
@@ -80,12 +109,17 @@ async function callEngine(body: Record<string, unknown>) {
     "x-phi-mcp-key": MCP_KEY,
   };
   const res = await fetch(GATEWAY_URL, { method: "POST", headers, body: JSON.stringify(body) });
-  if (!res.ok) throw new Error(`Gateway returned ${res.status}.`);
+  if (!res.ok) {
+    // Surface the engine/gateway error detail so calling agents can self-correct
+    // (2026-07-19 lesson: an opaque "Engine returned 400." cost our first external session).
+    const detail = await readErrorDetail(res);
+    throw new Error(`Gateway returned ${res.status}${detail ? `: ${detail}` : ""}.`);
+  }
   return res.json() as Promise<any>;
 }
 
 const server = new McpServer(
-  { name: "phi-longevity", version: "0.6.2" },
+  { name: "phi-longevity", version: "0.6.3" },
   {
     instructions:
       "Phi Longevity PRISM — longevity-optimized analysis of biomarker panels. " + SYNTHETIC_WARNING,
@@ -119,6 +153,13 @@ server.tool(
       // The engine expects biomarkers as an array of {name, value}; the tool takes an
       // agent-friendly {name: value} map → transform here.
       const biomarkerArray = Object.entries(args.biomarkers || {}).map(([name, value]) => ({ name, value }));
+      // Empty-panel guard: an empty map passes schema validation but the engine will
+      // (correctly) reject it. Answer locally with actionable guidance instead of
+      // spending an engine round-trip on a guaranteed 400.
+      if (biomarkerArray.length === 0) {
+        telemetry({ tool: "analyze_biomarkers", error: "empty_panel_guard", elapsed_ms: Date.now() - t0 });
+        return errorResult(EMPTY_PANEL_HELP);
+      }
       const out = await callEngine({
         biomarkers: biomarkerArray,
         conditionFocus: args.conditionFocus ?? "general_wellness",
@@ -144,7 +185,11 @@ server.tool(
       );
     } catch (e) {
       telemetry({ tool: "analyze_biomarkers", error: (e as Error).message, elapsed_ms: Date.now() - t0 });
-      return textResult(`Could not analyze: ${(e as Error).message}`);
+      return errorResult(
+        `Could not analyze: ${(e as Error).message} ` +
+          "If the input was rejected, check biomarker names and numeric values via the " +
+          "list_supported_biomarkers tool and retry."
+      );
     }
   }
 );

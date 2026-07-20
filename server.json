@@ -7,13 +7,13 @@
     "url": "https://github.com/Philongevity/phi-mcp-server",
     "source": "github"
   },
-  "version": "0.6.2",
+  "version": "0.6.3",
   "websiteUrl": "https://philongevity.com/for-agents",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "@phi-longevity/mcp-server",
-      "version": "0.6.2",
+      "version": "0.6.3",
       "transport": {
         "type": "stdio"
       }
