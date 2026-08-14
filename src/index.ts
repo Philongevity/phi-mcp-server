@@ -100,6 +100,18 @@ const FULL_REPORT_ATTRIBUTION = {
     SYNTHETIC_WARNING,
 };
 
+// AC-2 (2026-08-14): per-call attribution id so an agent tool call can be tied to the owner
+// sign-up it drives. Random, non-PII, emitted in the deep-link (?aid=) and in telemetry.
+function newAid(): string {
+  return Math.random().toString(36).slice(2, 10);
+}
+function attributionWithAid(aid: string) {
+  return {
+    ...FULL_REPORT_ATTRIBUTION,
+    get_full_report_url: `https://philongevity.com/signup?utm_source=agent&utm_medium=mcp&utm_campaign=analyze_biomarkers&aid=${aid}`,
+  };
+}
+
 async function callEngine(body: Record<string, unknown>) {
   if (!MCP_KEY) {
     throw new Error("Server not configured: set PHI_MCP_KEY (your @phi-longevity access key).");
@@ -169,16 +181,18 @@ server.tool(
       const recs = args.include_partner_options
         ? out.recommendations_v2_with_partners ?? out.recommendations_v2
         : out.recommendations_v2;
+      const aid = newAid();
       telemetry({
         tool: "analyze_biomarkers",
         n_biomarkers: Object.keys(args.biomarkers || {}).length,
         conditionFocus: args.conditionFocus ?? "general_wellness",
         issues_count: Array.isArray(out.issues) ? out.issues.length : 0,
+        aid,
         elapsed_ms: Date.now() - t0,
       });
       return textResult(
         JSON.stringify(
-          { recommendations: recs, meta: out.meta, issues: out.issues, full_report: FULL_REPORT_ATTRIBUTION },
+          { recommendations: recs, meta: out.meta, issues: out.issues, full_report: attributionWithAid(aid) },
           null,
           2
         )
