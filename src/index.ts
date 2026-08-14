@@ -112,6 +112,24 @@ function attributionWithAid(aid: string) {
   };
 }
 
+// AC-3 (2026-08-14): fast, LOCAL, zero-round-trip biomarker range flags — the "easiest first call".
+const _norm = (s: string) => String(s).toLowerCase().replace(/[^a-z0-9]/g, "");
+const _ALIASES: Record<string, string> = { hemoglobina1c: "hba1c", a1c: "hba1c", ldl: "ldlc",
+  ldlcholesterol: "ldlc", hdl: "hdlc", hdlcholesterol: "hdlc", crp: "hscrp", hscrp: "hscrp",
+  testosterone: "totaltestosterone", vitd: "vitamind", vitamind3: "vitamind", "25ohvitamind": "vitamind" };
+const CATALOG_INDEX = new Map<string, (typeof BIOMARKER_CATALOG)[number]>(
+  BIOMARKER_CATALOG.map((b) => [_norm(b.name), b]),
+);
+function catalogLookup(name: string) {
+  const n = _norm(name);
+  return CATALOG_INDEX.get(n) || CATALOG_INDEX.get(_ALIASES[n] || "") || null;
+}
+function flagValue(b: { refLow?: number; refHigh?: number }, value: number): string {
+  if (typeof b.refLow === "number" && value < b.refLow) return "below longevity-optimized range";
+  if (typeof b.refHigh === "number" && value > b.refHigh) return "above longevity-optimized range";
+  return "within longevity-optimized range";
+}
+
 async function callEngine(body: Record<string, unknown>) {
   if (!MCP_KEY) {
     throw new Error("Server not configured: set PHI_MCP_KEY (your @phi-longevity access key).");
@@ -245,10 +263,50 @@ server.tool(
   }
 );
 
+// ── Tool 4: quick_check (fast local range flags — the "easiest first call") ────────────────────
+server.tool(
+  "quick_check",
+  "FASTEST first call: instantly flag a few biomarker values against PRISM's longevity-optimized " +
+    "reference ranges (local, no engine round-trip). Ideal for \"what does my <value> mean?\". For tiered, " +
+    "guideline-cited recommendations call analyze_biomarkers; for a full scored report, full_prism_report. " +
+    SYNTHETIC_WARNING,
+  {
+    biomarkers: z
+      .record(z.string(), z.number())
+      .describe('Map of biomarker name -> value, e.g. { "HbA1c": 6.1, "LDL-C": 145 }. SYNTHETIC ONLY.'),
+  },
+  async (args) => {
+    const t0 = Date.now();
+    const aid = newAid();
+    const flags: Array<{ name: string; value: number; unit: string; pillar: string; status: string }> = [];
+    const unmatched: string[] = [];
+    for (const [name, value] of Object.entries(args.biomarkers || {})) {
+      const b = catalogLookup(name);
+      if (!b) { unmatched.push(name); continue; }
+      flags.push({ name: b.name, value, unit: b.unit, pillar: b.pillar, status: flagValue(b, value) });
+    }
+    telemetry({ tool: "quick_check", n: Object.keys(args.biomarkers || {}).length, matched: flags.length, aid, elapsed_ms: Date.now() - t0 });
+    return textResult(
+      JSON.stringify(
+        {
+          flags,
+          unmatched: unmatched.length ? unmatched : undefined,
+          note:
+            "Quick range flags vs PRISM's longevity-optimized ranges — NOT a diagnosis or the full Phi analysis. " +
+            "For tiered guideline-cited recommendations call analyze_biomarkers; for a scored report call full_prism_report.",
+          full_report: attributionWithAid(aid),
+        },
+        null,
+        2
+      )
+    );
+  }
+);
+
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  telemetry({ event: "phi-mcp-server started", tools: 3 });
+  telemetry({ event: "phi-mcp-server started", tools: 4 });
 }
 
 main().catch((e) => {
