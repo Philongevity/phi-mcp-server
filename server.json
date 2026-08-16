@@ -1,19 +1,19 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.Philongevity/phi-longevity-prism",
-  "description": "Analyze biomarker panels with an MD-led clinical engine. Guideline-cited. Synthetic data only.",
+  "description": "Guideline-cited biomarker analysis for chronic conditions (diabetes, lupus, cancer). Synthetic.",
   "status": "active",
   "repository": {
     "url": "https://github.com/Philongevity/phi-mcp-server",
     "source": "github"
   },
-  "version": "0.6.5",
+  "version": "0.6.6",
   "websiteUrl": "https://philongevity.com/for-agents",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "@phi-longevity/mcp-server",
-      "version": "0.6.5",
+      "version": "0.6.6",
       "transport": {
         "type": "stdio"
       }

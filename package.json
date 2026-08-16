@@ -1,7 +1,7 @@
 {
   "name": "@phi-longevity/mcp-server",
-  "version": "0.6.5",
-  "description": "Model Context Protocol server for Phi Longevity \u2014 agents can call the PRISM longevity recommendation engine on SYNTHETIC biomarker panels. Synthetic/de-identified data only; no PHI; stateless.",
+  "version": "0.6.6",
+  "description": "MCP server for Phi Longevity PRISM: analyze a biomarker panel with an MD-led, guideline-cited clinical engine — built for agents helping people manage chronic conditions like diabetes, cancer survivorship, lupus, and thyroid disease. Synthetic/de-identified data only; no PHI; stateless.",
   "license": "Apache-2.0",
   "type": "module",
   "bin": {
@@ -34,7 +34,14 @@
     "longevity",
     "health",
     "biomarkers",
-    "phi-longevity"
+    "phi-longevity",
+    "diabetes",
+    "cancer-survivorship",
+    "lupus",
+    "thyroid",
+    "chronic-disease",
+    "x402",
+    "prism"
   ],
   "mcpName": "io.github.Philongevity/phi-longevity-prism",
   "repository": {
