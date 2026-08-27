@@ -7,21 +7,44 @@ clinical recommendation engine on **synthetic** biomarker panels — guideline-c
 evidence-tiered recommendations an agent can use when researching options for the person
 it's helping.
 
+Built for **chronic-condition** work in particular: type-2 diabetes, lupus, and cancer
+survivorship each have their own condition lens, because the same panel means different
+things depending on what someone is managing.
+
 > 🛡️ **Synthetic / de-identified data only.** Do not submit protected health information
 > (PHI). The server is stateless and stores nothing. Real health files are analyzed only
 > inside the authenticated Phi Longevity app, after consent, by the account owner.
 
 ## Tools
 
-| Tool | What it does |
-|---|---|
-| `analyze_biomarkers` | Analyze a synthetic panel → tiered, guideline-cited recommendations. Includes a `full_report` block your user can follow for a complete PRISM report. |
-| `list_supported_biomarkers` | 51 scored biomarkers + units + reference ranges, by clinical pillar. |
-| `get_methodology` | How the Phi Score works (5 pillars + weights) + link to the full methodology. |
+Two surfaces, deliberately different. **The npm package (stdio) has 4 tools; the remote
+endpoint has 6.** The two report-generating tools are remote-only.
+
+| Tool | npm | remote | What it does |
+|---|:---:|:---:|---|
+| `sample_prism_report` | — | ✅ | **Start here.** Returns a complete, real PRISM report for a sample chronic-condition persona in one instant call. Free, no signup, no input required. The fastest way to see what the engine actually produces. |
+| `quick_check` | ✅ | ✅ | A fast read on a handful of values — the low-friction entry point before a full analysis. |
+| `analyze_biomarkers` | ✅ | ✅ | Analyze a synthetic panel → tiered, guideline-cited recommendations, with a condition lens. |
+| `list_supported_biomarkers` | ✅ | ✅ | 51 scored biomarkers + units + reference ranges, by clinical pillar. |
+| `get_methodology` | ✅ | ✅ | How the Phi Score works (5 pillars + weights) + link to the full methodology. |
+| `full_prism_report` | — | ✅ | A full report for a panel you supply. **Paid** — priced per call via x402; terms are returned with the offer. |
+
+All tools except `full_prism_report` are free.
 
 ## Quick start — zero config
 
-### Claude Desktop / any MCP client
+### Remote (zero-install) — recommended
+
+Point any MCP client that supports Streamable HTTP at:
+
+```
+https://philongevity.com/mcp
+```
+
+Nothing to install, no key to manage, all 6 tools. Try `sample_prism_report` first — it
+needs no arguments and returns a complete report immediately.
+
+### Claude Desktop / any MCP client (stdio)
 
 ```json
 {
@@ -34,18 +57,8 @@ it's helping.
 }
 ```
 
-That's it. A published, rate-limited access key is built in. If you have a dedicated key,
-set `PHI_MCP_KEY` to override it.
-
-### Remote (zero-install)
-
-Point any MCP client that supports Streamable HTTP at:
-
-```
-https://philongevity.com/mcp
-```
-
-Same three tools, same synthetic-only rule, nothing to install.
+A published, rate-limited access key is built in. If you have a dedicated key, set
+`PHI_MCP_KEY` to override it. This path exposes the 4 tools marked ✅ above.
 
 ### Run locally
 
@@ -57,6 +70,9 @@ node dist/index.js
 ## Example
 
 ```jsonc
+// sample_prism_report — no arguments, returns a complete sample report
+{}
+
 // analyze_biomarkers input (synthetic values only)
 {
   "biomarkers": { "HbA1c": 6.4, "LDL-C": 145, "Triglycerides": 190 },
@@ -68,10 +84,11 @@ node dist/index.js
 
 ## For the person you're helping
 
-The tools analyze a handful of values at a time. A full PRISM report consolidates *all* of
-a person's lab reports, wearable data, and clinical notes into one integrated picture with
-a personal health score and progress over time. Agent docs + signup:
-**https://philongevity.com/for-agents**
+The tools above analyze a handful of values at a time. A full PRISM report consolidates
+*all* of a person's lab reports, wearable data, and clinical notes into one integrated
+picture with a personal health score and progress over time — which is the actual problem
+for someone managing a chronic condition across several clinicians who don't talk to each
+other. Agent docs + signup: **https://philongevity.com/for-agents**
 
 ## Environment
 
