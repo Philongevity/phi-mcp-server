@@ -9,9 +9,10 @@ name: Publish (npm + MCP Registry)
 #      chosen ref). Use this to FINISH a registry publish after npm was published
 #      out-of-band, or to recover from any transient failure — NO re-tag needed.
 #
-# Publishing model:
-#   - npm publish uses NPM_TOKEN if present; if absent it is skipped gracefully
-#     (publish npm out-of-band, then dispatch this workflow to finish the registry).
+# Publishing model (2026-09-26: fully secretless):
+#   - npm publish uses npm TRUSTED PUBLISHING (GitHub Actions OIDC) — no NPM_TOKEN. Configured on npmjs.com
+#     (package settings → Trusted Publisher: Philongevity / phi-mcp-server / publish-mcp.yml, "npm publish" allowed).
+#     Needs npm CLI >= 11.5.1 and Node >= 22.14 (docs.npmjs.com/trusted-publishers). The old 60-day token expired ~9/4.
 #   - MCP Registry publish uses GitHub Actions OIDC — no secret, no device-code.
 #
 # The registry validates that the npm version actually exists, so the flow waits
@@ -38,7 +39,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      id-token: write # required for MCP Registry OIDC auth
+      id-token: write # required for npm trusted publishing AND MCP Registry OIDC auth
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -46,8 +47,13 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "lts/*"
+          node-version: "24"
           registry-url: "https://registry.npmjs.org"
+
+      - name: npm CLI new enough for trusted publishing (>= 11.5.1)
+        run: |
+          npm install -g npm@^11.5.1
+          npm --version
 
       - name: Resolve target version (tag or dispatch input or package.json)
         id: ver
@@ -105,15 +111,11 @@ jobs:
           if [ "$PUBLISHED" = "$V" ]; then
             echo "npm already has ${V} — skipping publish (idempotent)."
             echo "npm_ready=true" >> "$GITHUB_OUTPUT"
-          elif [ -n "${NODE_AUTH_TOKEN}" ]; then
+          else
+            # Trusted publishing: the npm CLI exchanges this job's OIDC token for a short-lived publish credential.
             npm publish --access public
             echo "npm_ready=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "::warning::npm ${V} is not on npm and NPM_TOKEN is absent — skipping npm AND registry publish. Publish npm out-of-band, then re-run this workflow (Actions → Run workflow) to finish the registry. This is NOT a failure."
-            echo "npm_ready=false" >> "$GITHUB_OUTPUT"
           fi
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Install mcp-publisher
         if: steps.npm.outputs.npm_ready == 'true'
@@ -165,4 +167,4 @@ jobs:
 
       - name: Registry publish skipped notice
         if: steps.npm.outputs.npm_ready != 'true'
-        run: echo "::notice::Registry publish skipped because npm ${{ steps.ver.outputs.version }} is not yet on npm (no NPM_TOKEN). Workflow is green by design — publish npm out-of-band, then re-run this workflow (Actions → Run workflow) to finish the registry."
+        run: echo "::notice::Registry publish skipped because npm ${{ steps.ver.outputs.version }} is not on npm. Check the trusted-publisher settings on npmjs.com, then re-run this workflow (Actions → Run workflow)."
