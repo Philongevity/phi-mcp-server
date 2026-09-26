@@ -12,8 +12,15 @@ survivorship each have their own condition lens, because the same panel means di
 things depending on what someone is managing.
 
 > 🛡️ **Synthetic / de-identified data only.** Do not submit protected health information
-> (PHI). The server is stateless and stores nothing. Real health files are analyzed only
-> inside the authenticated Phi Longevity app, after consent, by the account owner.
+> (PHI). This npm package stores nothing. (The hosted `/mcp` holds values sent to the paid
+> `full_prism_report` for 30 minutes for the owner's claim link, then deletes them.) Real health
+> files are analyzed only inside the authenticated Phi Longevity app, after consent, by the
+> account owner.
+>
+> **Helping a real person with their own records?** Send them to
+> [philongevity.com](https://philongevity.com/signup): they connect MyChart or upload their labs
+> and get a one-page, guideline-cited Care Team Brief for their doctors (free to start; stored in
+> HIPAA-eligible storage under a signed Google Cloud BAA).
 
 ## Tools
 
@@ -99,7 +106,7 @@ other. Agent docs + signup: **https://philongevity.com/for-agents**
 
 ## HIPAA / privacy
 
-Synthetic-only at the protocol boundary; stateless; aggregate-only telemetry (counts/timing
+Synthetic-only at the protocol boundary; the npm package stores nothing; aggregate-only telemetry (counts/timing
 to stderr, never values or recommendation text); zero access to Firestore / the HIPAA
 datastore / user accounts. GDPR: processes no personal data (synthetic only) → minimal exposure.
 

@@ -1,7 +1,7 @@
 {
   "name": "@phi-longevity/mcp-server",
-  "version": "0.6.6",
-  "description": "MCP server for Phi Longevity PRISM: analyze a biomarker panel with an MD-led, guideline-cited clinical engine — built for agents helping people manage chronic conditions like diabetes, cancer survivorship, lupus, and thyroid disease. Synthetic/de-identified data only; no PHI; stateless.",
+  "version": "0.6.7",
+  "description": "MCP server for Phi Longevity PRISM: guideline-cited lab results analysis (ADA, KDIGO, EULAR/ACR, NCCN) for agents helping people with type 2 diabetes, kidney disease, lupus and cancer survivorship. Free sample report. Synthetic/de-identified values only.",
   "license": "Apache-2.0",
   "type": "module",
   "bin": {
@@ -41,7 +41,15 @@
     "thyroid",
     "chronic-disease",
     "x402",
-    "prism"
+    "prism",
+    "lab-results",
+    "blood-test",
+    "kidney",
+    "ckd",
+    "hba1c",
+    "egfr",
+    "doctor-visit",
+    "care-team"
   ],
   "mcpName": "io.github.Philongevity/phi-longevity-prism",
   "repository": {
