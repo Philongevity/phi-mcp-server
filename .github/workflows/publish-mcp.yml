@@ -42,13 +42,16 @@ jobs:
       id-token: write # required for npm trusted publishing AND MCP Registry OIDC auth
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        # v6 + no cache = npm's documented trusted-publishing setup (docs.npmjs.com/trusted-publishers, checked 2026-09-26).
+        # setup-node v4 pre-set a placeholder NODE_AUTH_TOKEN, which npm tries instead of OIDC (first 0.6.7 run failed).
+        uses: actions/setup-node@v6
         with:
           node-version: "24"
           registry-url: "https://registry.npmjs.org"
+          package-manager-cache: false
 
       - name: npm CLI new enough for trusted publishing (>= 11.5.1)
         run: |
@@ -113,6 +116,7 @@ jobs:
             echo "npm_ready=true" >> "$GITHUB_OUTPUT"
           else
             # Trusted publishing: the npm CLI exchanges this job's OIDC token for a short-lived publish credential.
+            echo "npm $(npm --version) · node $(node --version) · NODE_AUTH_TOKEN set: $([ -n "${NODE_AUTH_TOKEN:-}" ] && echo yes || echo no)"
             npm publish --access public
             echo "npm_ready=true" >> "$GITHUB_OUTPUT"
           fi
