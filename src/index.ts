@@ -23,6 +23,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { BIOMARKER_CATALOG } from "./catalog.js";
+import { buildResolver } from "./aliases.js";
 
 const GATEWAY_URL = process.env.PHI_ENGINE_URL ?? "https://phi-mcp-gateway-bblwxa6cvq-uc.a.run.app";
 // Published-by-design access key (rate-limited, revocable by gateway redeploy).
@@ -113,17 +114,8 @@ function attributionWithAid(aid: string) {
 }
 
 // AC-3 (2026-08-14): fast, LOCAL, zero-round-trip biomarker range flags — the "easiest first call".
-const _norm = (s: string) => String(s).toLowerCase().replace(/[^a-z0-9]/g, "");
-const _ALIASES: Record<string, string> = { hemoglobina1c: "hba1c", a1c: "hba1c", ldl: "ldlc",
-  ldlcholesterol: "ldlc", hdl: "hdlc", hdlcholesterol: "hdlc", crp: "hscrp", hscrp: "hscrp",
-  testosterone: "totaltestosterone", vitd: "vitamind", vitamind3: "vitamind", "25ohvitamind": "vitamind" };
-const CATALOG_INDEX = new Map<string, (typeof BIOMARKER_CATALOG)[number]>(
-  BIOMARKER_CATALOG.map((b) => [_norm(b.name), b]),
-);
-function catalogLookup(name: string) {
-  const n = _norm(name);
-  return CATALOG_INDEX.get(n) || CATALOG_INDEX.get(_ALIASES[n] || "") || null;
-}
+// 2026-09-30: broad, collision-checked alias table (src/aliases.ts, 409 accepted names) — same as the hosted server.
+const catalogLookup = buildResolver(BIOMARKER_CATALOG);
 function flagValue(b: { refLow?: number; refHigh?: number }, value: number): string {
   if (typeof b.refLow === "number" && value < b.refLow) return "below longevity-optimized range";
   if (typeof b.refHigh === "number" && value > b.refHigh) return "above longevity-optimized range";
