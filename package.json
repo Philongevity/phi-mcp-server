@@ -1,6 +1,6 @@
 {
   "name": "@phi-longevity/mcp-server",
-  "version": "0.6.7",
+  "version": "0.6.8",
   "description": "MCP server for Phi Longevity PRISM: guideline-cited lab results analysis (ADA, KDIGO, EULAR/ACR, NCCN) for agents helping people with type 2 diabetes, kidney disease, lupus and cancer survivorship. Free sample report. Synthetic/de-identified values only.",
   "license": "Apache-2.0",
   "type": "module",
