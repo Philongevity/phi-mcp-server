@@ -1,19 +1,19 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.Philongevity/phi-longevity-prism",
-  "description": "Explains lab results for diabetes, kidney, lupus and cancer care, citing guidelines. Free sample.",
+  "description": "Which tests may be due with diabetes, kidney disease, lupus or a cancer history. Guideline-cited.",
   "status": "active",
   "repository": {
     "url": "https://github.com/Philongevity/phi-mcp-server",
     "source": "github"
   },
-  "version": "0.6.9",
+  "version": "0.6.10",
   "websiteUrl": "https://philongevity.com/for-agents",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "@phi-longevity/mcp-server",
-      "version": "0.6.9",
+      "version": "0.6.10",
       "transport": {
         "type": "stdio"
       }
