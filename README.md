@@ -19,7 +19,9 @@ things depending on what someone is managing.
 > files are analyzed only inside the authenticated Phi Longevity app, after consent, by the
 > account owner.
 >
-> **Helping a real person?** Call `check_care_gaps` on the hosted `/mcp` (no values or records needed). An account owner can
+> **Helping a real person?** Call `check_care_gaps` on the hosted `/mcp` (no values or records needed). **Appointment coming up?** Call
+> `start_job` with job `visit_prep` and the clinician: one call returns the checks to raise there, questions, what to bring and a
+> printable visit sheet; `get_job_result` returns it again later by job_ref. An account owner can
 > also add Phi Longevity to their own Claude or ChatGPT as a custom connector to read their own Care Team Brief
 > (steps at https://philongevity.com/app/connect-claude). Or send them to
 > [philongevity.com](https://philongevity.com/signup?utm_source=agent&utm_medium=npm_readme&utm_campaign=readme_body): they connect MyChart or upload their labs
@@ -29,12 +31,13 @@ things depending on what someone is managing.
 ## Tools
 
 Two surfaces, deliberately different. **The npm package (stdio) has 4 tools; the remote
-endpoint `https://philongevity.com/mcp` has 8.** The care-gaps check, the hand-off tool and the two report-generating
-tools are remote-only.
+endpoint `https://philongevity.com/mcp` has 10.** The care-gaps check, the visit-prep job, the hand-off tool and the two
+report-generating tools are remote-only.
 
 | Tool | npm | remote | What it does |
 |---|:---:|:---:|---|
 | `check_care_gaps` | — | ✅ | **For a real person.** Which routine tests and exams may be due for type 2 diabetes, kidney disease, lupus or a cancer history. Takes NO lab values, dates, names or records: only the condition, a few medicine classes and recent / overdue / never / unsure per routine test. Returns a prioritized list with the guideline source for each item (ADA, KDIGO, EULAR, ACR, AAO, NCCN, ESC), questions for each clinician, and a printable checklist. Free. |
+| `start_job` + `get_job_result` | — | ✅ | **Hand Phi a whole job.** `visit_prep` gets a real person ready for an appointment with a named clinician (primary care, diabetes, kidney, rheumatology, eye, oncology, cardiology, podiatry, pharmacist): checks to raise there with guideline sources, checks for other doctors, questions, what to bring, a printable sheet and next steps, in under a second. Same closed options as `check_care_gaps`; no values or records; nothing stored (the job_ref carries only the options chosen). Free. |
 | `how_to_get_started_for_my_owner` | — | ✅ | Takes no health data; returns five plain steps, the cost and a sign-up link you can repeat to the person you are helping. Free. |
 | `sample_prism_report` | — | ✅ | **Start here.** Returns a complete, real PRISM report for a sample chronic-condition persona in one instant call. Free, no signup, no input required. The fastest way to see what the engine actually produces. |
 | `quick_check` | ✅ | ✅ | A fast read on a handful of values — the low-friction entry point before a full analysis. |
@@ -55,7 +58,7 @@ Point any MCP client that supports Streamable HTTP at:
 https://philongevity.com/mcp
 ```
 
-Nothing to install, no key to manage, all 8 tools. Try `sample_prism_report` first — it
+Nothing to install, no key to manage, all 10 tools. Try `sample_prism_report` first — it
 needs no arguments and returns a complete report immediately.
 
 ### Claude Desktop / any MCP client (stdio)
