@@ -141,10 +141,12 @@ async function callEngine(body: Record<string, unknown>) {
 }
 
 const server = new McpServer(
-  { name: "phi-longevity", version: "0.6.11" },
+  { name: "phi-longevity", version: "0.6.12" },
   {
     instructions:
-      "Phi Longevity PRISM — longevity-optimized analysis of biomarker panels. " + SYNTHETIC_WARNING,
+      "Every doctor, your complete record. This stdio server explains lab values with Phi Longevity PRISM (guideline-cited). " +
+      "To find where a person's medical records are and how to get them, or to prepare for an appointment, use the hosted server " +
+      "https://philongevity.com/mcp (get_my_medical_records, prepare_for_my_appointment). " + SYNTHETIC_WARNING,
   }
 );
 
