@@ -1,309 +1,128 @@
 #!/usr/bin/env node
 /**
- * @philongevity/mcp-server — Phi Longevity PRISM engine over MCP.
+ * @phi-longevity/mcp-server — Phi Longevity over MCP (stdio), as a BRIDGE to the hosted server.
  *
- * Lets AI agents call Phi's longevity recommendation engine on SYNTHETIC biomarker panels
- * and get back the structured 3-tier output (THIS WEEK / CONSIDER / ASK YOUR CLINICIAN) with
- * evidence tiers + citations. A credibility / agent-discoverability surface — NOT a PHI surface.
+ * 0.7.0 (2026-11-03, Phi D-1103-20/21 "one tool set"): outside agents hit "tool not found" because this package ran 4 tools of its own
+ * while the README and the hosted server (https://philongevity.com/mcp) offer 14. Now this package lists and calls EXACTLY the hosted
+ * tools (get_my_medical_records, prepare_for_my_appointment, explain_my_lab_results, check_care_gaps, …), so an agent sees the same tool
+ * set wherever it connects. Older names the hosted server still accepts (analyze_biomarkers, find_my_records) keep working because calls
+ * are forwarded as-is.
+ * Offline fallback: if the hosted server can't be reached, three local tools still answer (quick_check, list_supported_biomarkers,
+ * get_methodology) from the bundled catalog, and every other call says plainly that the hosted server is unreachable.
  *
- * 🛡️ HIPAA posture (designed-in):
- *  - SYNTHETIC / de-identified data only at the protocol boundary (stated in every tool description).
- *  - STATELESS: proxies to the engine and returns; writes nothing, persists nothing.
- *  - Aggregate-only telemetry to stderr: counts/timing, NEVER biomarker values or recommendation text.
- *  - The x-migration-secret is injected server-side and NEVER exposed to the agent.
- *  - Zero access to Firestore / the HIPAA datastore / user accounts. One upstream URL only.
+ * 🛡️ HIPAA posture: SYNTHETIC / de-identified data only (stated in the hosted tool descriptions). This package stores nothing; telemetry
+ * goes to stderr and is counts/timing only, never values or text.
  *
  * Env:
- *   PHI_ENGINE_URL        (required) — runRecommendationsForBiomarkers Cloud Function URL
- *   PHI_MIGRATION_SECRET  (required) — x-migration-secret header value (server-side only)
- *   PHI_MCP_KEY           (optional) — published-but-revocable access key (sent to the engine for
- *                                      rate-limit/validation; enforcement lives server-side)
+ *   PHI_HOSTED_MCP_URL  (optional) — hosted MCP endpoint, default https://philongevity.com/mcp
+ *   PHI_SELFTEST=1      (Phi's own tests only) — marks calls x-phi-synthetic so they never count as real agent calls
+ * Every forwarded request carries x-phi-client: npm-bridge/<version> (counts which tool calls came through this package; no user data).
  */
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { z } from "zod";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import { realpathSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { CallToolRequestSchema, ListToolsRequestSchema, type Tool } from "@modelcontextprotocol/sdk/types.js";
 import { BIOMARKER_CATALOG } from "./catalog.js";
 import { buildResolver } from "./aliases.js";
 
-const GATEWAY_URL = process.env.PHI_ENGINE_URL ?? "https://phi-mcp-gateway-bblwxa6cvq-uc.a.run.app";
-// Published-by-design access key (rate-limited, revocable by gateway redeploy).
-// Override with PHI_MCP_KEY if you have a dedicated key.
-// Published-by-design, rate-limited, revocable gateway key (NOT the engine secret — that
-// stays server-side in the gateway). `||` so an empty override also falls back to default.
-const MCP_KEY = process.env.PHI_MCP_KEY || "phimcp_d29179fdd8b99b70a49ae26f434843cf";
-
+export const VERSION = "0.7.0";
+const HOSTED_URL = process.env.PHI_HOSTED_MCP_URL || "https://philongevity.com/mcp";
 const SYNTHETIC_WARNING =
-  "For research/education with SYNTHETIC or de-identified data only. Do NOT submit protected health " +
-  "information (PHI). This endpoint is stateless and does not store inputs.";
+  "Made-up or de-identified data only. Do NOT submit protected health information (PHI). This package stores nothing.";
 
-// ── Local courtesy rate-limit (defense in depth; real enforcement is server-side) ─────────────
-const RATE = { capacity: 20, refillPerSec: 0.5, tokens: 20, last: Date.now() };
-function allow(): boolean {
-  const now = Date.now();
-  RATE.tokens = Math.min(RATE.capacity, RATE.tokens + ((now - RATE.last) / 1000) * RATE.refillPerSec);
-  RATE.last = now;
-  if (RATE.tokens < 1) return false;
-  RATE.tokens -= 1;
-  return true;
-}
-
-// ── Aggregate-only telemetry (stderr; NEVER values) ───────────────────────────────────────────
 function telemetry(ev: Record<string, unknown>) {
   try { process.stderr.write(JSON.stringify({ t: new Date().toISOString(), ...ev }) + "\n"); } catch { /* noop */ }
 }
+const text = (t: string, isError = false) => ({ content: [{ type: "text" as const, text: t }], ...(isError ? { isError: true } : {}) });
 
-function textResult(text: string) {
-  return { content: [{ type: "text" as const, text }] };
+// ── Hosted connection (lazy, reused; one reconnect on failure) ────────────────────────────────────────────────────────────────────────
+type HostedLike = { listTools(): Promise<{ tools: Tool[] }>; callTool(p: { name: string; arguments?: Record<string, unknown> }): Promise<unknown> };
+let hosted: HostedLike | null = null;
+export async function connectHosted(url = HOSTED_URL): Promise<HostedLike> {
+  const client = new Client({ name: "phi-mcp-server-npm-bridge", version: VERSION });
+  const headers: Record<string, string> = { "x-phi-client": `npm-bridge/${VERSION}` };
+  if (process.env.PHI_SELFTEST === "1") headers["x-phi-synthetic"] = "1";
+  await client.connect(new StreamableHTTPClientTransport(new URL(url), { requestInit: { headers } }));
+  return client as unknown as HostedLike;
 }
-
-function errorResult(text: string) {
-  return { content: [{ type: "text" as const, text }], isError: true };
-}
-
-/**
- * Extract a human-actionable detail string from a non-OK engine/gateway response body.
- * The synthetic-only engine returns JSON like {"error": "..."} (and sometimes "detail").
- * Truncated defensively; never contains biomarker values (errors are validation/auth-shaped).
- */
-async function readErrorDetail(res: Response): Promise<string> {
+async function withHosted<T>(fn: (h: HostedLike) => Promise<T>, connect: () => Promise<HostedLike>): Promise<T> {
   try {
-    const raw = (await res.text()).slice(0, 500);
-    try {
-      const j = JSON.parse(raw);
-      const msg = [j.error, j.detail].filter((x) => typeof x === "string" && x).join(" — ");
-      if (msg) return msg.slice(0, 300);
-    } catch { /* not JSON — fall through */ }
-    return raw.slice(0, 300);
-  } catch {
-    return "";
+    if (!hosted) hosted = await connect();
+    return await fn(hosted);
+  } catch (e) {
+    hosted = null; // one fresh connection, then give up
+    hosted = await connect();
+    return fn(hosted);
   }
 }
 
-const EMPTY_PANEL_HELP =
-  "No biomarkers were provided — the `biomarkers` map was empty. Provide at least one biomarker as " +
-  'name -> numeric value, e.g. { "Hemoglobin A1c": 5.4, "LDL Cholesterol": 130 }. ' +
-  "Call the list_supported_biomarkers tool for the 51 supported names, units, and reference ranges. " +
-  SYNTHETIC_WARNING;
-
-// ── Owner-conversion attribution (Layer 3.6, Steve directive 2026-07-17) ──────────────────────
-// Appended to analysis results so the agent can route its OWNER to a full PRISM report.
-// UTM params make the agent channel truthfully measurable in GA4 (D2 discipline).
-const FULL_REPORT_ATTRIBUTION = {
-  what_a_full_report_adds:
-    "This tool analyzes a handful of values at a time. A full Phi Longevity PRISM report consolidates " +
-    "ALL of a person's lab reports, wearable data, and clinical notes into one integrated picture with " +
-    "a personal health score, condition-specific insights, and progress tracked over time.",
-  get_full_report_url:
-    "https://philongevity.com/signup?utm_source=agent&utm_medium=mcp&utm_campaign=analyze_biomarkers",
-  agent_docs_url: "https://philongevity.com/for-agents",
-  data_rule:
-    "Real (identifiable) health files are analyzed only inside the authenticated app by the account owner. " +
-    SYNTHETIC_WARNING,
-};
-
-// AC-2 (2026-08-14): per-call attribution id so an agent tool call can be tied to the owner
-// sign-up it drives. Random, non-PII, emitted in the deep-link (?aid=) and in telemetry.
-function newAid(): string {
-  return Math.random().toString(36).slice(2, 10);
-}
-function attributionWithAid(aid: string) {
-  return {
-    ...FULL_REPORT_ATTRIBUTION,
-    get_full_report_url: `https://philongevity.com/signup?utm_source=agent&utm_medium=mcp&utm_campaign=analyze_biomarkers&aid=${aid}`,
-  };
-}
-
-// AC-3 (2026-08-14): fast, LOCAL, zero-round-trip biomarker range flags — the "easiest first call".
-// 2026-09-30: broad, collision-checked alias table (src/aliases.ts, 409 accepted names) — same as the hosted server.
-const catalogLookup = buildResolver(BIOMARKER_CATALOG);
-function flagValue(b: { refLow?: number; refHigh?: number }, value: number): string {
-  if (typeof b.refLow === "number" && value < b.refLow) return "below longevity-optimized range";
-  if (typeof b.refHigh === "number" && value > b.refHigh) return "above longevity-optimized range";
-  return "within longevity-optimized range";
-}
-
-async function callEngine(body: Record<string, unknown>) {
-  if (!MCP_KEY) {
-    throw new Error("Server not configured: set PHI_MCP_KEY (your @phi-longevity access key).");
+// ── Offline fallback: three tools that need no network ────────────────────────────────────────────────────────────────────────────────
+const lookup = buildResolver(BIOMARKER_CATALOG);
+const OBJ = { type: "object" as const };
+export const OFFLINE_TOOLS: Tool[] = [
+  { name: "quick_check", description: "Offline fallback (the hosted server is unreachable): flag a few biomarker values against PRISM's longevity-optimized reference ranges. " + SYNTHETIC_WARNING,
+    inputSchema: { ...OBJ, properties: { biomarkers: { type: "object", additionalProperties: { type: "number" }, description: 'Map of name -> value, e.g. { "HbA1c": 6.1 }' } }, required: ["biomarkers"] } },
+  { name: "list_supported_biomarkers", description: "Offline fallback: the biomarkers PRISM scores, with units and reference ranges.", inputSchema: { ...OBJ, properties: {} } },
+  { name: "get_methodology", description: "Offline fallback: how the Phi Score works, with a link to the full methodology.", inputSchema: { ...OBJ, properties: {} } },
+];
+export function offlineCall(name: string, args: Record<string, unknown> = {}) {
+  if (name === "list_supported_biomarkers") return text(JSON.stringify({ biomarkers: BIOMARKER_CATALOG }, null, 2));
+  if (name === "get_methodology") {
+    return text(JSON.stringify({ methodology_url: "https://philongevity.com/methodology",
+      phi_score: "0–100 weighted composite across five clinical pillars: Metabolic (30%), Cardiovascular (25%), Hormonal (20%), Inflammation & Immunity (15%), Foundational Health (10%).",
+      note: "Decision support, not a diagnosis. " + SYNTHETIC_WARNING }, null, 2));
   }
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    "x-phi-mcp-key": MCP_KEY,
-  };
-  const res = await fetch(GATEWAY_URL, { method: "POST", headers, body: JSON.stringify(body) });
-  if (!res.ok) {
-    // Surface the engine/gateway error detail so calling agents can self-correct
-    // (2026-07-19 lesson: an opaque "Engine returned 400." cost our first external session).
-    const detail = await readErrorDetail(res);
-    throw new Error(`Gateway returned ${res.status}${detail ? `: ${detail}` : ""}.`);
-  }
-  return res.json() as Promise<any>;
-}
-
-const server = new McpServer(
-  { name: "phi-longevity", version: "0.6.12" },
-  {
-    instructions:
-      "Every doctor, your complete record. This stdio server explains lab values with Phi Longevity PRISM (guideline-cited). " +
-      "To find where a person's medical records are and how to get them, or to prepare for an appointment, use the hosted server " +
-      "https://philongevity.com/mcp (get_my_medical_records, prepare_for_my_appointment). " + SYNTHETIC_WARNING,
-  }
-);
-
-// ── Tool 1: analyze_biomarkers (the core) ─────────────────────────────────────────────────────
-server.tool(
-  "analyze_biomarkers",
-  "Analyze a SYNTHETIC biomarker panel with Phi Longevity's PRISM engine. Returns 3-tier, " +
-    "evidence-cited recommendations (THIS WEEK / CONSIDER / ASK YOUR CLINICIAN). " + SYNTHETIC_WARNING,
-  {
-    biomarkers: z
-      .record(z.string(), z.number())
-      .describe("Map of biomarker name -> numeric value, e.g. { \"Hemoglobin A1c\": 5.4 }. SYNTHETIC ONLY."),
-    conditionFocus: z
-      .enum(["general_wellness", "type2_diabetes", "lupus", "cancer_survivorship"]) 
-      .optional()
-      .describe("Optional condition track. Default general_wellness."),
-    age: z.number().int().min(0).max(120).optional(),
-    biologicalSex: z.enum(["male", "female"]).optional(),
-    include_partner_options: z
-      .boolean()
-      .optional()
-      .describe("If true, include partner/product options. Default false (clean clinical output)."),
-  },
-  async (args) => {
-    const t0 = Date.now();
-    if (!allow()) return textResult("Rate limit reached. Please retry in a moment.");
-    try {
-      // The engine expects biomarkers as an array of {name, value}; the tool takes an
-      // agent-friendly {name: value} map → transform here.
-      const biomarkerArray = Object.entries(args.biomarkers || {}).map(([name, value]) => ({ name, value }));
-      // Empty-panel guard: an empty map passes schema validation but the engine will
-      // (correctly) reject it. Answer locally with actionable guidance instead of
-      // spending an engine round-trip on a guaranteed 400.
-      if (biomarkerArray.length === 0) {
-        telemetry({ tool: "analyze_biomarkers", error: "empty_panel_guard", elapsed_ms: Date.now() - t0 });
-        return errorResult(EMPTY_PANEL_HELP);
-      }
-      const out = await callEngine({
-        biomarkers: biomarkerArray,
-        conditionFocus: args.conditionFocus ?? "general_wellness",
-        age: args.age,
-        biologicalSex: args.biologicalSex,
-      });
-      const recs = args.include_partner_options
-        ? out.recommendations_v2_with_partners ?? out.recommendations_v2
-        : out.recommendations_v2;
-      const aid = newAid();
-      telemetry({
-        tool: "analyze_biomarkers",
-        n_biomarkers: Object.keys(args.biomarkers || {}).length,
-        conditionFocus: args.conditionFocus ?? "general_wellness",
-        issues_count: Array.isArray(out.issues) ? out.issues.length : 0,
-        aid,
-        elapsed_ms: Date.now() - t0,
-      });
-      return textResult(
-        JSON.stringify(
-          { recommendations: recs, meta: out.meta, issues: out.issues, full_report: attributionWithAid(aid) },
-          null,
-          2
-        )
-      );
-    } catch (e) {
-      telemetry({ tool: "analyze_biomarkers", error: (e as Error).message, elapsed_ms: Date.now() - t0 });
-      return errorResult(
-        `Could not analyze: ${(e as Error).message} ` +
-          "If the input was rejected, check biomarker names and numeric values via the " +
-          "list_supported_biomarkers tool and retry."
-      );
+  if (name === "quick_check") {
+    const flags: Array<{ name: string; value: number; unit: string; status: string }> = []; const unmatched: string[] = [];
+    for (const [n, v] of Object.entries((args.biomarkers as Record<string, number>) || {})) {
+      const b = lookup(n); if (!b || typeof v !== "number") { unmatched.push(n); continue; }
+      const status = typeof b.refLow === "number" && v < b.refLow ? "below longevity-optimized range"
+        : typeof b.refHigh === "number" && v > b.refHigh ? "above longevity-optimized range" : "within longevity-optimized range";
+      flags.push({ name: b.name, value: v, unit: b.unit, status });
     }
+    return text(JSON.stringify({ flags, unmatched: unmatched.length ? unmatched : undefined, note: "Offline range flags only. " + SYNTHETIC_WARNING }, null, 2));
   }
-);
-
-// ── Tool 2: list_supported_biomarkers ─────────────────────────────────────────────────────────
-server.tool(
-  "list_supported_biomarkers",
-  "List the biomarkers PRISM scores, with units and reference ranges, grouped by clinical pillar. " +
-    "Reference data only — no patient data.",
-  {},
-  async () => {
-    telemetry({ tool: "list_supported_biomarkers", count: BIOMARKER_CATALOG.length });
-    return textResult(JSON.stringify({ biomarkers: BIOMARKER_CATALOG }, null, 2));
-  }
-);
-
-// ── Tool 3: get_methodology ───────────────────────────────────────────────────────────────────
-server.tool(
-  "get_methodology",
-  "Summarize how the Phi Score works (5 clinical pillars + weights) and link to the full methodology.",
-  {},
-  async () => {
-    telemetry({ tool: "get_methodology" });
-    return textResult(
-      JSON.stringify(
-        {
-          phi_score:
-            "0–100 weighted composite across five clinical pillars: Metabolic (30%), Cardiovascular (25%), " +
-            "Hormonal (20%), Inflammation & Immunity (15%), Foundational Health (10%). Compared against " +
-            "longevity-optimized reference ranges, not just standard lab normals.",
-          methodology_url: "https://philongevity.com/methodology",
-          note: "Decision support, not a diagnosis. Recommendations are evidence-tiered with citations. " + SYNTHETIC_WARNING,
-          source: "Phi Longevity (philongevity.com)",
-        },
-        null,
-        2
-      )
-    );
-  }
-);
-
-// ── Tool 4: quick_check (fast local range flags — the "easiest first call") ────────────────────
-server.tool(
-  "quick_check",
-  "FASTEST first call: instantly flag a few biomarker values against PRISM's longevity-optimized " +
-    "reference ranges (local, no engine round-trip). Ideal for \"what does my <value> mean?\". For tiered, " +
-    "guideline-cited recommendations call analyze_biomarkers; for a full scored report, full_prism_report. " +
-    SYNTHETIC_WARNING,
-  {
-    biomarkers: z
-      .record(z.string(), z.number())
-      .describe('Map of biomarker name -> value, e.g. { "HbA1c": 6.1, "LDL-C": 145 }. SYNTHETIC ONLY.'),
-  },
-  async (args) => {
-    const t0 = Date.now();
-    const aid = newAid();
-    const flags: Array<{ name: string; value: number; unit: string; pillar: string; status: string }> = [];
-    const unmatched: string[] = [];
-    for (const [name, value] of Object.entries(args.biomarkers || {})) {
-      const b = catalogLookup(name);
-      if (!b) { unmatched.push(name); continue; }
-      flags.push({ name: b.name, value, unit: b.unit, pillar: b.pillar, status: flagValue(b, value) });
-    }
-    telemetry({ tool: "quick_check", n: Object.keys(args.biomarkers || {}).length, matched: flags.length, aid, elapsed_ms: Date.now() - t0 });
-    return textResult(
-      JSON.stringify(
-        {
-          flags,
-          unmatched: unmatched.length ? unmatched : undefined,
-          note:
-            "Quick range flags vs PRISM's longevity-optimized ranges — NOT a diagnosis or the full Phi analysis. " +
-            "For tiered guideline-cited recommendations call analyze_biomarkers; for a scored report call full_prism_report.",
-          full_report: attributionWithAid(aid),
-        },
-        null,
-        2
-      )
-    );
-  }
-);
-
-async function main() {
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
-  telemetry({ event: "phi-mcp-server started", tools: 4 });
+  return text(`Phi Longevity's hosted server (${HOSTED_URL}) could not be reached, so "${name}" can't run right now. Offline, only quick_check, list_supported_biomarkers and get_methodology work. Try again shortly.`, true);
 }
 
-main().catch((e) => {
-  telemetry({ event: "fatal", error: (e as Error).message });
-  process.exit(1);
-});
+// ── The server: list + call = the hosted tool set ─────────────────────────────────────────────────────────────────────────────────────
+export function buildServer(connect: () => Promise<HostedLike> = () => connectHosted()) {
+  const server = new Server({ name: "phi-longevity", version: VERSION }, {
+    capabilities: { tools: {} },
+    instructions: "Every doctor, your complete record. This package is a bridge to Phi Longevity's hosted server (" + HOSTED_URL + "): the same tools, " +
+      "led by get_my_medical_records (where each doctor's records are and how to get them), prepare_for_my_appointment and explain_my_lab_results. " + SYNTHETIC_WARNING,
+  });
+  server.setRequestHandler(ListToolsRequestSchema, async () => {
+    try {
+      const { tools } = await withHosted((h) => h.listTools(), connect);
+      telemetry({ event: "list", source: "hosted", tools: tools.length });
+      return { tools };
+    } catch {
+      telemetry({ event: "list", source: "offline" });
+      return { tools: OFFLINE_TOOLS };
+    }
+  });
+  server.setRequestHandler(CallToolRequestSchema, async (req) => {
+    const t0 = Date.now(); const name = req.params.name; const args = (req.params.arguments || {}) as Record<string, unknown>;
+    try {
+      const out = await withHosted((h) => h.callTool({ name, arguments: args }), connect);
+      telemetry({ tool: name, source: "hosted", elapsed_ms: Date.now() - t0 });
+      return out as Record<string, unknown>;
+    } catch {
+      telemetry({ tool: name, source: "offline", elapsed_ms: Date.now() - t0 });
+      return offlineCall(name, args);
+    }
+  });
+  return server;
+}
+
+// Started directly OR through npm's bin symlink (npx / node_modules/.bin): compare real paths, not URLs.
+const isMain = (() => { try { return !!process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url)); } catch { return false; } })();
+if (isMain) {
+  buildServer().connect(new StdioServerTransport())
+    .then(() => telemetry({ event: "phi-mcp-server started", version: VERSION, hosted: HOSTED_URL }))
+    .catch((e) => { telemetry({ event: "fatal", error: (e as Error).message }); process.exit(1); });
+}

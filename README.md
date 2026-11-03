@@ -32,24 +32,22 @@ A Model Context Protocol (MCP) server for AI assistants helping someone with a l
 
 ## Tools
 
-Two surfaces, deliberately different. **The npm package (stdio) has 4 tools; the remote
-endpoint `https://philongevity.com/mcp` has 13.** The three front doors, the care-gaps check, the analysis jobs, the hand-off
-tool and the report tools are remote-only. On the remote, the older names `find_my_records`, `start_job` (job `visit_prep`)
-and `analyze_biomarkers` still work and route to the front doors.
+**One tool set everywhere (0.7.0).** This npm package is now a bridge to the hosted server `https://philongevity.com/mcp`: it lists and calls exactly the same 14 tools, so an agent sees the same names whether it connects here, to `/mcp` or to `/mcp-app`. The older names `find_my_records`, `start_job` (job `visit_prep`) and `analyze_biomarkers` still work and route to the front doors. If the hosted server can't be reached, `quick_check`, `list_supported_biomarkers` and `get_methodology` still answer offline.
 
-| Tool | npm | remote | What it does |
-|---|:---:|:---:|---|
-| `get_my_medical_records` | — | ✅ | **Front door 1, for a real person.** Every doctor, one complete record: for each hospital or clinic name, which patient portal it uses (Epic MyChart or Oracle Health, formerly Cerner), how to download the records, a step-by-step guide, and how to connect it in Phi once. Hospital or clinic name only, never personal details; stores nothing. Free. |
-| `prepare_for_my_appointment` + `get_job_result` | — | ✅ | **Front door 2, for a real person.** Ready for an appointment with a named clinician (primary care, diabetes, kidney, rheumatology, eye, oncology, cardiology, podiatry, pharmacist): checks to raise there with guideline sources, checks for other doctors, questions, what to bring, a printable sheet and next steps. Only closed options (condition, medicine classes, recent / overdue / never / unsure per routine test); no values or records; nothing stored. `get_job_result` returns the same sheet later by job_ref. Free. |
-| `explain_my_lab_results` | ✅ (as `analyze_biomarkers`) | ✅ | **Front door 3.** Made-up or de-identified lab values → guideline-cited recommendations with a condition lens. The hosted door also returns PRISM 2's quick reading (health picture, connections graded and sourced, what is due, safety notes, what is unknown, checked by an independent review). |
-| `start_lab_analysis` + `get_lab_analysis` | — | ✅ | The deepest PRISM 2 reading on the strongest model: start it, then collect it a little later. Made-up or de-identified values only. Free. |
-| `check_care_gaps` | — | ✅ | Which routine tests and exams may be due for type 2 diabetes, kidney disease, lupus or a cancer history. Takes NO lab values, dates, names or records. Returns a prioritized list with the guideline source for each item (ADA, KDIGO, EULAR, ACR, AAO, NCCN, ESC), questions for each clinician, and a printable checklist. Free. |
-| `how_to_get_started_for_my_owner` | — | ✅ | Takes no health data; returns five plain steps, the cost and a sign-up link you can repeat to the person you are helping. Free. |
-| `sample_prism_report` | — | ✅ | Returns a complete sample PRISM report for a made-up person in one instant call. Free, no input. |
-| `quick_check` | ✅ | ✅ | A fast read on a handful of values: which fall outside PRISM's reference ranges. |
-| `list_supported_biomarkers` | ✅ | ✅ | 51 lab tests PRISM interprets, with units and reference ranges. |
-| `get_methodology` | ✅ | ✅ | How PRISM scores results (5 health areas + weights) + link to the full methodology. |
-| `full_prism_report` | — | ✅ | A full multi-track report for a panel you supply. **Paid developer option** (x402); terms are returned with the offer. |
+| Tool | What it does |
+|---|---|
+| `get_my_medical_records` | **Front door 1, for a real person.** Every doctor, one complete record: for each hospital or clinic name, which patient portal it uses (Epic MyChart or Oracle Health, formerly Cerner), how to download the records, a step-by-step guide, and how to connect it in Phi once. Hospital or clinic name only, never personal details; stores nothing. Free. |
+| `prepare_for_my_appointment` + `get_job_result` | **Front door 2, for a real person.** Ready for an appointment with a named clinician (primary care, diabetes, kidney, rheumatology, eye, oncology, cardiology, podiatry, pharmacist): checks to raise there with guideline sources, checks for other doctors, questions, what to bring, a printable sheet and next steps. Only closed options (condition, medicine classes, recent / overdue / never / unsure per routine test); no values or records; nothing stored. `get_job_result` returns the same sheet later by job_ref. Free. |
+| `explain_my_lab_results` | **Front door 3.** Made-up or de-identified lab values → guideline-cited recommendations with a condition lens. The hosted door also returns PRISM 2's quick reading (health picture, connections graded and sourced, what is due, safety notes, what is unknown, checked by an independent review). |
+| `start_lab_analysis` + `get_lab_analysis` | The deepest PRISM 2 reading on the strongest model: start it, then collect it a little later. Made-up or de-identified values only. Free. |
+| `check_care_gaps` | Which routine tests and exams may be due for type 2 diabetes, kidney disease, lupus or a cancer history. Takes NO lab values, dates, names or records. Returns a prioritized list with the guideline source for each item (ADA, KDIGO, EULAR, ACR, AAO, NCCN, ESC), questions for each clinician, and a printable checklist. Free. |
+| `start_my_phi_account` | With the person's OK, starts their Phi Longevity account: Phi emails them a one-tap link and what you already did together (hospitals, visit sheet, care-gaps answers) carries over for them to keep. Email address only; nothing else personal. |
+| `how_to_get_started_for_my_owner` | Takes no health data; returns five plain steps, the cost and a sign-up link you can repeat to the person you are helping. Free. |
+| `sample_prism_report` | Returns a complete sample PRISM report for a made-up person in one instant call. Free, no input. |
+| `quick_check` | A fast read on a handful of values: which fall outside PRISM's reference ranges. |
+| `list_supported_biomarkers` | 51 lab tests PRISM interprets, with units and reference ranges. |
+| `get_methodology` | How PRISM scores results (5 health areas + weights) + link to the full methodology. |
+| `full_prism_report` | A full multi-track report for a panel you supply. **Paid developer option** (x402); terms are returned with the offer. |
 
 All tools except `full_prism_report` are free.
 
@@ -63,7 +61,7 @@ Point any MCP client that supports Streamable HTTP at:
 https://philongevity.com/mcp
 ```
 
-Nothing to install, no key to manage, all 13 tools. Helping a real person? Start with `get_my_medical_records`. Just
+Nothing to install, no key to manage, all 14 tools. Helping a real person? Start with `get_my_medical_records`. Just
 looking? `sample_prism_report` needs no arguments and returns a complete sample report immediately.
 
 ### Claude Desktop / any MCP client (stdio)
