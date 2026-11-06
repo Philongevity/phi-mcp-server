@@ -28,7 +28,7 @@ import { CallToolRequestSchema, ListToolsRequestSchema, type Tool } from "@model
 import { BIOMARKER_CATALOG } from "./catalog.js";
 import { buildResolver } from "./aliases.js";
 
-export const VERSION = "0.7.0";
+export const VERSION = "0.7.1";
 const HOSTED_URL = process.env.PHI_HOSTED_MCP_URL || "https://philongevity.com/mcp";
 const SYNTHETIC_WARNING =
   "Made-up or de-identified data only. Do NOT submit protected health information (PHI). This package stores nothing.";
