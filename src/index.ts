@@ -28,7 +28,7 @@ import { CallToolRequestSchema, ListToolsRequestSchema, type Tool } from "@model
 import { BIOMARKER_CATALOG } from "./catalog.js";
 import { buildResolver } from "./aliases.js";
 
-export const VERSION = "0.7.1";
+export const VERSION = "0.7.2";
 const HOSTED_URL = process.env.PHI_HOSTED_MCP_URL || "https://philongevity.com/mcp";
 const SYNTHETIC_WARNING =
   "Made-up or de-identified data only. Do NOT submit protected health information (PHI). This package stores nothing.";
@@ -92,7 +92,7 @@ export function offlineCall(name: string, args: Record<string, unknown> = {}) {
 export function buildServer(connect: () => Promise<HostedLike> = () => connectHosted()) {
   const server = new Server({ name: "phi-longevity", version: VERSION }, {
     capabilities: { tools: {} },
-    instructions: "Every doctor, your complete record. This package is a bridge to Phi Longevity's hosted server (" + HOSTED_URL + "): the same tools, " +
+    instructions: "Every doctor, your complete record: connect your patient portals or upload records from any doctor. This package is a bridge to Phi Longevity's hosted server (" + HOSTED_URL + "): the same tools, " +
       "led by get_my_medical_records (where each doctor's records are and how to get them), prepare_for_my_appointment and explain_my_lab_results. " + SYNTHETIC_WARNING,
   });
   server.setRequestHandler(ListToolsRequestSchema, async () => {
