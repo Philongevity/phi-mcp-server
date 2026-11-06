@@ -66,7 +66,7 @@ export const OFFLINE_TOOLS: Tool[] = [
   { name: "quick_check", description: "Offline fallback (the hosted server is unreachable): flag a few biomarker values against PRISM's longevity-optimized reference ranges. " + SYNTHETIC_WARNING,
     inputSchema: { ...OBJ, properties: { biomarkers: { type: "object", additionalProperties: { type: "number" }, description: 'Map of name -> value, e.g. { "HbA1c": 6.1 }' } }, required: ["biomarkers"] } },
   { name: "list_supported_biomarkers", description: "Offline fallback: the biomarkers PRISM scores, with units and reference ranges.", inputSchema: { ...OBJ, properties: {} } },
-  { name: "get_methodology", description: "Offline fallback: how the Phi Score works, with a link to the full methodology.", inputSchema: { ...OBJ, properties: {} } },
+  { name: "get_methodology", description: "Offline fallback: how the Phi Longevity Score works, with a link to the full methodology.", inputSchema: { ...OBJ, properties: {} } },
 ];
 export function offlineCall(name: string, args: Record<string, unknown> = {}) {
   if (name === "list_supported_biomarkers") return text(JSON.stringify({ biomarkers: BIOMARKER_CATALOG }, null, 2));
