@@ -1,6 +1,6 @@
 {
   "name": "@phi-longevity/mcp-server",
-  "version": "0.7.2",
+  "version": "0.7.3",
   "description": "Every doctor, your complete record: connect your patient portals or upload records from any doctor. Phi Longevity for AI assistants, with three free front doors on the hosted server: get_my_medical_records (which patient portal each hospital or clinic uses, how to get the records out, and how to keep them in one complete record; ModMed practices by download and upload), prepare_for_my_appointment (checks to raise, questions, what to bring and a printable sheet; no records needed) and explain_my_lab_results (guideline-cited reading of lab values). For type 2 diabetes, kidney disease, lupus and cancer survivorship. This public server takes made-up or de-identified values only; a person's real records go in a free account at philongevity.com (Phi Longevity Complete: $19/month or $190/year).",
   "license": "Apache-2.0",
   "type": "module",
