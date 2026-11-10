@@ -1,0 +1,35 @@
+name: CI (build)
+
+# 2026-11-10 (D-1110-11): this repo had no PR checks, so George's merge helper (which merges only when every check on the PR's
+# head commit passed) always refused, and Steve had to click Merge by hand. This minimal check builds the package and confirms the
+# versions in package.json, server.json and src/index.ts agree, so a PR can be merged after it is green.
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Versions agree (package.json, server.json, src/index.ts)
+        run: |
+          P=$(node -p "require('./package.json').version")
+          S=$(node -p "require('./server.json').version")
+          SP=$(node -p "require('./server.json').packages[0].version")
+          I=$(grep -oE 'VERSION = "[0-9.]+"' src/index.ts | grep -oE '[0-9.]+')
+          echo "package.json $P · server.json $S / $SP · src $I"
+          [ "$P" = "$S" ] && [ "$P" = "$SP" ] && [ "$P" = "$I" ]
+      - name: Built package reports the same version
+        run: node -e "import('./dist/index.js').then(m=>{if(m.VERSION!==require('./package.json').version)process.exit(1);console.log('dist',m.VERSION)})"
